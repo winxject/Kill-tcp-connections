@@ -13,3 +13,17 @@ All three of them do the same function, which is:
 - First, it checks for suspicious ports on your device, and if it finds them, it will kill them
 - It finds the IP or server/host of the hacker and sends repeated requests to it and kills it from your device (Dos)
 - If you make the code execute automatically (start up), it will automatically do this process as soon as you open your device or restart it
+
+
+On Arabic:
+
+
+قتل اتصالات TCP/UDP
+أعتقد أنني وجدت الحل العبقري الذي لم يفكر فيه أحد <3
+
+الموضوع بسيط للغاية: عندما تفتح برنامجًا ضارًا على جهازك، سيقوم هذا البرنامج الضار بإنشاء اتصال TCP أو UDP مخفي دون علمك ووظيفة هذا الاتصال هي توصيل جهازك بخادم أو مضيف ينشئه المخترق للتحكم في ضحاياه (c2)
+لذلك قمت بإنشاء حل لهذا الشيء، وهو: 3 أكواد Python و C و C++ جميعها تؤدي نفس الوظيفة، وهي: (يجب عليك تشغيل الأكواد كمسؤول)
+
+أولاً، يتحقق من المنافذ المشبوهة على جهازك، وإذا وجدها، فسيقتلها
+يجد عنوان IP أو خادم/مضيف المخترق ويرسل طلبات متكررة إليه ويقتله من جهازك (Dos)
+إذا جعلت الكود ينفذ تلقائيًا (بدء التشغيل)، فسيقوم تلقائيًا بهذه العملية بمجرد فتح جهازك أو إعادة تشغيله
