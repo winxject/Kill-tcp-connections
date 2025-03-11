@@ -1,0 +1,79 @@
+import os
+import psutil
+import socket
+import subprocess
+import time
+import requests
+
+# Define known suspicious ports (common for reverse shells, RATs, etc.)
+SUSPICIOUS_PORTS = {4444, 5555, 8080, 1337, 3389, 9001, 6666}
+
+def get_active_connections():
+    """Retrieve all active network connections."""
+    active_connections = []
+    for conn in psutil.net_connections(kind='inet'):
+        if conn.status == psutil.CONN_ESTABLISHED and conn.raddr:
+            active_connections.append((conn.pid, conn.laddr.port, conn.raddr.ip, conn.raddr.port))
+    return active_connections
+
+def is_suspicious_ip(ip):
+    """Check if an IP is suspicious (e.g., external unknown sources)."""
+    try:
+        # Ignore local IPs (192.168.x.x, 10.x.x.x, 127.x.x.x)
+        if ip.startswith(("192.168.", "10.", "127.")):
+            return False
+        # More sophisticated checks can be added here
+        return True
+    except:
+        return False
+
+def block_ip(ip):
+    """Block a suspicious IP address."""
+    print(f"[!] Blocking suspicious IP: {ip}")
+    if os.name == 'nt':  # Windows
+        os.system(f"netsh advfirewall firewall add rule name='Block Hacker IP' dir=in action=block remoteip={ip}")
+    else:  # Linux
+        os.system(f"sudo iptables -A INPUT -s {ip} -j DROP")
+
+def kill_process(pid):
+    """Terminate a process associated with a suspicious connection."""
+    try:
+        process = psutil.Process(pid)
+        print(f"[X] Terminating process: {process.name()} (PID: {pid})")
+        process.terminate()
+    except Exception as e:
+        print(f"[!] Failed to terminate process: {e}")
+
+def block_port(port):
+    """Close a suspicious port."""
+    print(f"[!] Closing suspicious port: {port}")
+    if os.name == 'nt':  # Windows
+        os.system(f"netsh advfirewall firewall add rule name='Block Port' dir=in action=block protocol=TCP localport={port}")
+    else:  # Linux
+        os.system(f"sudo iptables -A INPUT -p tcp --dport {port} -j DROP")
+
+def attack_hacker_server(ip, port):
+    """Attempt to disrupt the hacker's server using multiple requests (Mini DoS)."""
+    print(f"[*] Attempting to disrupt hacker server at {ip}:{port}")
+    try:
+        for _ in range(5):  # Send multiple requests
+            requests.get(f"http://{ip}:{port}", timeout=2)
+            time.sleep(0.5)
+    except:
+        print("[+] Hacker server might be down!")
+
+def detect_and_block_hacker():
+    """Detect suspicious connections and take necessary actions."""
+    active_conns = get_active_connections()
+    for pid, local_port, remote_ip, remote_port in active_conns:
+        if remote_port in SUSPICIOUS_PORTS or is_suspicious_ip(remote_ip):
+            print(f"[!] Suspicious connection detected to {remote_ip}:{remote_port}")
+            block_ip(remote_ip)
+            block_port(remote_port)
+            kill_process(pid)
+            attack_hacker_server(remote_ip, remote_port)
+
+if __name__ == "__main__":
+    while True:
+        detect_and_block_hacker()
+        time.sleep(10)  # Check every 10 seconds
