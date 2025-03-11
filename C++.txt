@@ -1,0 +1,165 @@
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <thread>
+#include <chrono>
+#include <cstdlib>
+#include <sstream>
+#include <unordered_set>
+#include <regex>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
+using namespace std;
+
+// قائمة البورتات المشبوهة (Reverse Shell, RATs, VPN Exploits)
+unordered_set<int> suspicious_ports = {4444, 5555, 8080, 1337, 3389, 9001, 6666, 7777, 9999, 1080};
+
+// دالة لتنفيذ الأوامر واسترجاع الإخراج
+string exec_command(const char* cmd) {
+    char buffer[256];
+    string result;
+    FILE* pipe;
+    
+    #ifdef _WIN32
+        pipe = _popen(cmd, "r");
+    #else
+        pipe = popen(cmd, "r");
+    #endif
+
+    if (!pipe) return "ERROR";
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        result += buffer;
+    }
+
+    #ifdef _WIN32
+        _pclose(pipe);
+    #else
+        pclose(pipe);
+    #endif
+
+    return result;
+}
+
+// دالة للتحقق مما إذا كان الـ IP محليًا
+bool is_local_ip(const string& ip) {
+    return regex_match(ip, regex("(192\\.168\\.|10\\.|127\\.|172\\.(1[6-9]|2[0-9]|3[0-1]))"));
+}
+
+// دالة لحظر عنوان IP
+void block_ip(const string& ip) {
+    if (is_local_ip(ip)) return; // لا تحظر الاتصالات المحلية
+    cout << "[!] Blocking IP: " << ip << endl;
+    string command;
+    #ifdef _WIN32
+        command = "netsh advfirewall firewall add rule name='Block Hacker' dir=in action=block remoteip=" + ip;
+    #else
+        command = "sudo iptables -A INPUT -s " + ip + " -j DROP";
+    #endif
+    system(command.c_str());
+}
+
+// دالة لحظر بورت معين
+void block_port(int port) {
+    cout << "[!] Blocking Port: " << port << endl;
+    string command;
+    #ifdef _WIN32
+        command = "netsh advfirewall firewall add rule name='Block Port' dir=in action=block protocol=TCP localport=" + to_string(port);
+    #else
+        command = "sudo iptables -A INPUT -p tcp --dport " + to_string(port) + " -j DROP";
+    #endif
+    system(command.c_str());
+}
+
+// دالة لمهاجمة سيرفر الهكر
+void attack_hacker_server(const string& ip, int port) {
+    if (is_local_ip(ip)) return; // لا تهاجم الشبكة الداخلية
+    cout << "[*] Attacking hacker server at " << ip << ":" << port << endl;
+    
+    string command;
+    #ifdef _WIN32
+        command = "powershell -Command \"Invoke-WebRequest -Uri http://" + ip + ":" + to_string(port) + " -UseBasicParsing\"";
+    #else
+        command = "wget -qO- http://" + ip + ":" + to_string(port) + " > /dev/null";
+    #endif
+
+    for (int i = 0; i < 5; i++) {
+        system(command.c_str());
+        this_thread::sleep_for(chrono::milliseconds(500));
+    }
+}
+
+// دالة لمسح الاتصالات المشبوهة وحظرها
+void scan_and_block() {
+    cout << "[*] Scanning for suspicious connections..." << endl;
+    string netstat_output;
+    #ifdef _WIN32
+        netstat_output = exec_command("netstat -ano | findstr ESTABLISHED");
+    #else
+        netstat_output = exec_command("netstat -ant | grep ESTABLISHED");
+    #endif
+
+    regex netstat_pattern(R"((\d+\.\d+\.\d+\.\d+):(\d+))");
+    smatch match;
+    stringstream ss(netstat_output);
+    string line;
+
+    while (getline(ss, line)) {
+        if (regex_search(line, match, netstat_pattern)) {
+            string ip = match[1];
+            int port = stoi(match[2]);
+
+            if (suspicious_ports.count(port)) {
+                cout << "[!] Suspicious connection detected: " << ip << ":" << port << endl;
+                block_ip(ip);
+                block_port(port);
+                attack_hacker_server(ip, port);
+            }
+        }
+    }
+}
+
+// دالة لحفظ السجلات
+void log_suspicious_activity(const string& message) {
+    ofstream log_file("hacker_protection.log", ios::app);
+    if (log_file) {
+        log_file << "[LOG] " << message << endl;
+        log_file.close();
+    }
+}
+
+// آلية الدفاع الذاتي لإعادة التشغيل إذا توقف
+void self_defense() {
+    while (true) {
+        this_thread::sleep_for(chrono::seconds(30));
+        string running_processes;
+        #ifdef _WIN32
+            running_processes = exec_command("tasklist | findstr hacker_protection.exe");
+        #else
+            running_processes = exec_command("ps aux | grep hacker_protection | grep -v grep");
+        #endif
+
+        if (running_processes.empty()) {
+            cout << "[!] Warning: Protection system stopped! Restarting..." << endl;
+            log_suspicious_activity("Protection system was stopped and restarted.");
+            system("./hacker_protection &");
+        }
+    }
+}
+
+// الدالة الرئيسية لتشغيل النظام
+int main() {
+    cout << "🔥 Smart Hacker Protection System Started! 🔥" << endl;
+    thread defense_thread(self_defense); // تشغيل آلية الحماية الذاتية
+
+    while (true) {
+        scan_and_block();
+        this_thread::sleep_for(chrono::seconds(10)); // فحص كل 10 ثوانٍ
+    }
+
+    defense_thread.join();
+    return 0;
+}
