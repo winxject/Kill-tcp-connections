@@ -1,0 +1,100 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <ifaddrs.h>
+
+#define MAX_PORTS 10
+
+// List of suspicious ports (reverse shells, RATs, etc.)
+int suspicious_ports[MAX_PORTS] = {4444, 5555, 8080, 1337, 3389, 9001, 6666, 7777, 9999, 1080};
+
+void block_ip(const char *ip) {
+    char command[128];
+
+    // Block IP using iptables (Linux) or netsh (Windows)
+    #ifdef _WIN32
+        snprintf(command, sizeof(command), "netsh advfirewall firewall add rule name='Block Hacker' dir=in action=block remoteip=%s", ip);
+    #else
+        snprintf(command, sizeof(command), "sudo iptables -A INPUT -s %s -j DROP", ip);
+    #endif
+
+    printf("[!] Blocking IP: %s\n", ip);
+    system(command);
+}
+
+void block_port(int port) {
+    char command[128];
+
+    #ifdef _WIN32
+        snprintf(command, sizeof(command), "netsh advfirewall firewall add rule name='Block Port' dir=in action=block protocol=TCP localport=%d", port);
+    #else
+        snprintf(command, sizeof(command), "sudo iptables -A INPUT -p tcp --dport %d -j DROP", port);
+    #endif
+
+    printf("[!] Blocking Port: %d\n", port);
+    system(command);
+}
+
+void attack_hacker_server(const char *ip, int port) {
+    char command[256];
+
+    snprintf(command, sizeof(command), "curl -s http://%s:%d > /dev/null", ip, port);
+    
+    printf("[*] Attempting to disrupt hacker server at %s:%d\n", ip, port);
+    
+    for (int i = 0; i < 5; i++) {
+        system(command);
+        sleep(1);
+    }
+}
+
+void scan_and_block() {
+    char buffer[256], ip[20];
+    int port;
+    FILE *fp;
+
+    // Run netstat command to check active connections
+    #ifdef _WIN32
+        fp = _popen("netstat -ano | findstr ESTABLISHED", "r");
+    #else
+        fp = popen("netstat -ant | grep ESTABLISHED", "r");
+    #endif
+
+    if (!fp) {
+        printf("Error running netstat\n");
+        return;
+    }
+
+    while (fgets(buffer, sizeof(buffer), fp)) {
+        sscanf(buffer, "%*s %*s %*s %s %d", ip, &port);
+
+        // Check if the port is suspicious
+        for (int i = 0; i < MAX_PORTS; i++) {
+            if (port == suspicious_ports[i]) {
+                printf("[!] Suspicious Connection Detected: %s:%d\n", ip, port);
+                block_ip(ip);
+                block_port(port);
+                attack_hacker_server(ip, port);
+            }
+        }
+    }
+
+    #ifdef _WIN32
+        _pclose(fp);
+    #else
+        pclose(fp);
+    #endif
+}
+
+int main() {
+    while (1) {
+        scan_and_block();
+        sleep(10); // Check every 10 seconds
+    }
+    return 0;
+}
